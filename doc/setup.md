@@ -4,7 +4,7 @@
 ## 1. Hardware Setup
 Please follow steps in the User Manual that comes with the TurtleBot.
 
-## 2. RaspberryPi Setup:
+## 2. RaspberryPi Setup
 
 ### 2.1. Ubuntu MATE
 My TurtleBot model comes with RaspberryPi 3 Model B+, which is not officially supported by OpenRobotics for Ubuntu MATE. However, the newest release Ubuntu MATE 18.04.2 is available and can be installed on this RaspberryPi model. Please download the OS image from [Ubuntu MATE website](https://ubuntu-mate.org/raspberry-pi/) and follow the steps to restore the image on SD card.
@@ -83,4 +83,20 @@ $ sudo service ssh status
 Then you can ssh into TurtleBot from your PC using:
 ```
 $ ssh ssh <Username_of_TurtleBot>@<IP_of_TurtleBot>
+```
+
+## 3. OpenCR Setup
+Enter the following commands in TurtleBot:
+```
+$ export OPENCR_PORT=/dev/ttyACM0
+$ export OPENCR_MODEL=waffle
+$ rm -rf ./opencr_update.tar.bz2
+$ wget https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2 && tar -xvf opencr_update.tar.bz2 && cd ./opencr_update && ./update.sh $OPENCR_PORT $OPENCR_MODEL.opencr && cd ..
+```
+
+## 4. Basic Operation
+To test if the installation is successful, run the following ROS packages to drive the TurtleBot using keyboard:
+```
+$ roslaunch turtlebot3_bringup turtlebot3_robot.launch
+$ rosrun turtlebot3_teleop turtlebot3_teleop_key
 ```
