@@ -82,7 +82,13 @@ $ sudo service ssh status
 ```
 Then you can ssh into TurtleBot from your PC using:
 ```
-$ ssh ssh <Username_of_TurtleBot>@<IP_of_TurtleBot>
+$ ssh <Username_of_TurtleBot>@<IP_of_TurtleBot>
+```
+Current login info:
+```
+Username_of_TurtleBot: pi@wafflepi
+IP_of_TurtleBot: 192.168.0.102
+Password: turtlebot
 ```
 
 ## 3. OpenCR Setup
