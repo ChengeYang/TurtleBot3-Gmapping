@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>spring_project</name>
+  <name>turtlebot3_gmapping</name>
   <version>0.0.0</version>
-  <description>The spring_project package</description>
+  <description>The turtlebot3_gmapping package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -19,7 +19,7 @@
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/spring_project</url> -->
+  <!-- <url type="website">http://wiki.ros.org/turtlebot3_gmapping</url> -->
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
