@@ -69,7 +69,7 @@ public:
   {
   }
 
-  Particle(Stamped2DPose init_pose, Mapper mapper, double weight)
+  Particle(const Stamped2DPose& init_pose, const Mapper& mapper, double weight)
     : cur_pose_(init_pose)
     , pre_pose_(init_pose)
     , mapper_(mapper)

@@ -1,8 +1,5 @@
 <launch>
 
-  <node pkg="tf" type="static_transform_publisher" name="map_to_odom"
-        args="0 0 0 0 0 0 /map /odom 100"/>
-
   <!-- Gmapping -->
   <node pkg="my_gmapping" type="my_gmapping"
         name="my_gmapping" output="screen">
@@ -12,14 +9,24 @@
     <param name="base_frame" value="base_footprint"/>
 
     <!-- Map parameters -->
-    <param name="map_x_max" value="1.0"/>
-    <param name="map_x_min" value="-1.0"/>
-    <param name="map_y_max" value="1.0"/>
-    <param name="map_y_min" value="-1.0"/>
-    <param name="map_resolution" value="0.1"/>
+    <param name="map_x_max" value="3.0"/>
+    <param name="map_x_min" value="-3.0"/>
+    <param name="map_y_max" value="3.0"/>
+    <param name="map_y_min" value="-3.0"/>
+    <param name="map_resolution" value="0.05"/>
+
+    <!-- Motion model parameters -->
+    <param name="motion_noise_t_t" value="0.1"/>
+    <param name="motion_noise_x_y" value="0.03"/>
+    <param name="motion_noise_t_r" value="0.1"/>
+    <param name="motion_noise_r_t" value="0.2"/>
+    <param name="motion_noise_r_r" value="0.2"/>
+
+    <!-- Measurement model parameters -->
+    <param name="laser_range_max" value="3.5"/>
 
     <!-- Particle Filter parameters -->
-    <param name="num_particles" value="10"/>
+    <param name="num_particles" value="1"/>
   </node>
 
 </launch>

@@ -42,14 +42,88 @@
 #define MEASUREMENT_HPP
 
 #include <iostream>
+#include <cmath>
+
+#include <sensor_msgs/LaserScan.h>
+
+#include "my_gmapping/particle.hpp"
+#include "my_gmapping/utils.hpp"
 
 namespace my_gmapping
 {
 class MeasurementModel
 {
 public:
+  double laser_range_max_;
+
+public:
   MeasurementModel()
   {
+  }
+
+  MeasurementModel(double laser_range_max) : laser_range_max_(laser_range_max)
+  {
+  }
+
+public:
+  void addScanToMap(Particle& particle, const sensor_msgs::LaserScan& msg)
+  {
+    // Get bearings
+    std::vector<double> bearings;
+    getLaserScanBearings(msg, bearings);
+
+    // Map to record update status of each grid
+    // -1 free, 0 no update, 1 occupied
+    std::vector<int> update_queue(particle.mapper_.map_.size(), 0);
+    for (size_t i = 0; i < msg.ranges.size(); i++)
+    {
+      if (msg.ranges[i] > laser_range_max_)
+        continue;
+
+      int index = getLaserScanIndex(particle, msg.ranges[i], bearings[i]);
+      update_queue[index] = 1;
+    }
+
+    // Update map
+    for (size_t i = 0; i < update_queue.size(); i++)
+    {
+      if (update_queue[i] == 1)
+      {
+        particle.mapper_.map_[i] += 1.0;
+        continue;
+      }
+
+      if (update_queue[i] == -1)
+      {
+        particle.mapper_.map_[i] -= 1.0;
+        continue;
+      }
+    }
+  }
+
+public:
+  // Process laser scan input
+  void getLaserScanBearings(const sensor_msgs::LaserScan& msg,
+                            std::vector<double>& bearings)
+  {
+    for (size_t i = 0; i < msg.ranges.size(); i++)
+    {
+      bearings.push_back(msg.angle_min + i * msg.angle_increment);
+    }
+  }
+
+  // Return the index in vector map given robot pose and measurement
+  int getLaserScanIndex(const Particle& particle, double range, double bearing)
+  {
+    double angle = particle.cur_pose_.theta_ + bearing;
+    normalizeTheta(angle);
+
+    double x = particle.cur_pose_.x_ + range * std::cos(angle);
+    double y = particle.cur_pose_.y_ + range * std::sin(angle);
+
+    int index = particle.mapper_.posToIndex(x, y);
+
+    return index;
   }
 };
 

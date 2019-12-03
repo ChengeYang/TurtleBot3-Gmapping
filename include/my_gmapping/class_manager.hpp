@@ -78,14 +78,18 @@ public:
         std::make_shared<TransformManager>(map_frame, odom_frame, base_frame);
   }
 
-  void initMotionModel()
+  void initMotionModel(double motion_noise_t_t, double motion_noise_x_y,
+                       double motion_noise_t_r, double motion_noise_r_t,
+                       double motion_noise_r_r)
   {
-    motion_model_ = std::make_shared<MotionModel>();
+    motion_model_ = std::make_shared<MotionModel>(
+        motion_noise_t_t, motion_noise_x_y, motion_noise_t_r, motion_noise_r_t,
+        motion_noise_r_r);
   }
 
-  void initMeasurementModel()
+  void initMeasurementModel(double laser_range_max)
   {
-    measurement_model_ = std::make_shared<MeasurementModel>();
+    measurement_model_ = std::make_shared<MeasurementModel>(laser_range_max);
   }
 
   void initParticleFilter(int num_particles, double timestamp, double x,

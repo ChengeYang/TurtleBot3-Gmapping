@@ -89,6 +89,16 @@ public:
   double map_y_max_;
   double map_y_min_;
 
+  // Motion model noise
+  double motion_noise_t_t_;  // Noise in x or y due to change in x or y
+  double motion_noise_x_y_;  // Noise in x or y due to change in y or x
+  double motion_noise_t_r_;  // Noise in x or y due to change in theta
+  double motion_noise_r_t_;  // Noise in theta due to change in y or x
+  double motion_noise_r_r_;  // Noise in theta due to change in theta
+
+  // Measurement model
+  double laser_range_max_;
+
   // Particle Filter
   int num_particles_;
 
@@ -112,27 +122,34 @@ public:
     nh_.getParam("map_x_min", map_x_min_);
     nh_.getParam("map_y_max", map_y_max_);
     nh_.getParam("map_y_min", map_y_min_);
+    nh_.getParam("motion_noise_t_t", motion_noise_t_t_);
+    nh_.getParam("motion_noise_x_y", motion_noise_x_y_);
+    nh_.getParam("motion_noise_t_r", motion_noise_t_r_);
+    nh_.getParam("motion_noise_r_t", motion_noise_r_t_);
+    nh_.getParam("motion_noise_r_r", motion_noise_r_r_);
+    nh_.getParam("laser_range_max", laser_range_max_);
     nh_.getParam("num_particles", num_particles_);
 
     // Publisher
     map_pub_ = nh_.advertise<nav_msgs::OccupancyGrid>("/my_gmapping/map", 1);
   }
 
-  void laserScanCallback(const sensor_msgs::LaserScanPtr msg)
-  {
-  }
-
-public:
   void init()
   {
     // Initialize all submodules through class_manager
     class_manager_ = std::make_shared<ClassManager>();
     class_manager_->initTransformManager(map_frame_, odom_frame_, base_frame_);
-    class_manager_->initMotionModel();
-    class_manager_->initMeasurementModel();
-    class_manager_->initParticleFilter(num_particles_, 0.0, 0.0, 0.0, 0.0,
-                                       map_resolution_, map_x_max_, map_x_min_,
-                                       map_y_max_, map_y_min_);
+    class_manager_->initMotionModel(motion_noise_t_t_, motion_noise_x_y_,
+                                    motion_noise_t_r_, motion_noise_r_t_,
+                                    motion_noise_r_r_);
+    class_manager_->initMeasurementModel(laser_range_max_);
+    class_manager_->initParticleFilter(
+        num_particles_,
+        class_manager_->transform_manager_->cur_odom_pose_.timestamp_,
+        class_manager_->transform_manager_->cur_odom_pose_.x_,
+        class_manager_->transform_manager_->cur_odom_pose_.y_,
+        class_manager_->transform_manager_->cur_odom_pose_.theta_,
+        map_resolution_, map_x_max_, map_x_min_, map_y_max_, map_y_min_);
 
     // Waiting for the initializations to finish
     ros::Duration(1).sleep();
@@ -143,6 +160,76 @@ public:
     // Start subscribing to LaserScan topic /scan
     laser_scan_sub_ =
         nh_.subscribe("/scan", 1, &Gmapping::laserScanCallback, this);
+
+    // Publish loop
+    ros::Rate rate(30);
+    while (ros::ok())
+    {
+      publishData();
+      ros::spinOnce();
+      rate.sleep();
+    }
+  }
+
+public:
+  void laserScanCallback(const sensor_msgs::LaserScan& msg)
+  {
+    // Read odometry data from tf
+    if (!class_manager_->transform_manager_->getOdometryData())
+    {
+      std::cerr << "Fail to get odometry data" << std::endl;
+      return;
+    }
+
+    // Conduct update in Particle Filter
+    class_manager_->particle_filter_->update(
+        msg, class_manager_->transform_manager_->pre_odom_pose_,
+        class_manager_->transform_manager_->cur_odom_pose_);
+  }
+
+  void publishData()
+  {
+    // Publish robot pose estimate to tf
+    class_manager_->transform_manager_->publishMapToOdomTransform(
+        class_manager_->particle_filter_->pose_);
+
+    // Publish map estimate to /my_gmapping/map
+    publishMap(class_manager_->particle_filter_->mapper_);
+  }
+
+  void publishMap(const Mapper& mapper)
+  {
+    nav_msgs::OccupancyGrid map_msg;
+
+    map_msg.header.stamp = ros::Time::now();
+    map_msg.header.frame_id = map_frame_;
+
+    map_msg.info.resolution = mapper.resolution_;
+    map_msg.info.width = mapper.x_size_;
+    map_msg.info.height = mapper.y_size_;
+    map_msg.info.origin.position.x = mapper.x_min_;
+    map_msg.info.origin.position.y = mapper.y_min_;
+    map_msg.info.origin.position.z = 0.0;
+    map_msg.info.origin.orientation.x = 0.0;
+    map_msg.info.origin.orientation.y = 0.0;
+    map_msg.info.origin.orientation.z = 0.0;
+    map_msg.info.origin.orientation.w = 0.0;
+
+    map_msg.data.resize(map_msg.info.width * map_msg.info.height);
+    for (size_t i = 0; i < mapper.map_.size(); i++)
+    {
+      // Obstacle
+      if (mapper.map_[i] < 0.0)
+        map_msg.data[i] = -1;
+      // Unknown
+      else if (mapper.map_[i] < 0.25)
+        map_msg.data[i] = 0;
+      // Free
+      else
+        map_msg.data[i] = 100;
+    }
+
+    map_pub_.publish(map_msg);
   }
 };
 

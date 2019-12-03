@@ -47,8 +47,10 @@
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
 
-#include <geometry_msgs/TransformStamped.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 #include "my_gmapping/utils.hpp"
 
@@ -60,11 +62,19 @@ private:
   // TF subscriber and publisher
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
+  tf2_ros::TransformBroadcaster tf_broadcaster_;
 
   // Frame names
   std::string map_frame_;
   std::string odom_frame_;
   std::string base_frame_;
+
+public:
+  // Current and previous odometry data
+  geometry_msgs::TransformStamped pre_odom_transform_;
+  Stamped2DPose pre_odom_pose_;
+  geometry_msgs::TransformStamped cur_odom_transform_;
+  Stamped2DPose cur_odom_pose_;
 
 public:
   // Construtor
@@ -79,27 +89,94 @@ public:
     , odom_frame_(odom_frame)
     , base_frame_(base_frame)
   {
+    // Get initial transform between /odom and /base
+    while (!this->getOdometryData())
+    {
+    }
   }
 
 public:
-  // Read odometry data from /tf and transfer to Pose data
-  // void getOdometryData(Pose& pose)
-  // {
-  //   try
-  //   {
-  //     geometry_msgs::TransformStamped transform_stamped =
-  //         tf_buffer_.lookupTransform("odom", "base_footprint", ros::Time(0));
-  //     pose.timestamp_ = 0;
-  //     pose.x_ = 0;
-  //     pose.y_ = 0;
-  //     pose.theta_ = 0;
-  //   }
-  //   catch (const std::exception& e)
-  //   {
-  //     std::cerr << e.what() << '\n';
-  //     std::cerr << ros::Time::now() << " " << '\n';
-  //   }
-  // }
+  // Read odometry data from /tf and convert to Stamped2DPose
+  bool getOdometryData()
+  {
+    geometry_msgs::TransformStamped temp_transform;
+    Stamped2DPose temp_pose;
+
+    try
+    {
+      temp_transform = tf_buffer_.lookupTransform(
+          odom_frame_, base_frame_, ros::Time(0), ros::Duration(0.1));
+      convert(temp_transform, temp_pose);
+    }
+    catch (const std::exception& e)
+    {
+      std::cerr << e.what() << '\n';
+      return false;
+    }
+
+    pre_odom_transform_ = cur_odom_transform_;
+    pre_odom_pose_ = cur_odom_pose_;
+    cur_odom_transform_ = temp_transform;
+    cur_odom_pose_ = temp_pose;
+
+    return true;
+  }
+
+  // Publish /map to /odom transform to tf given current robot pose estimate
+  // from Particle Filter
+  void publishMapToOdomTransform(Stamped2DPose pose)
+  {
+    // std::cerr << pose.timestamp_ << " " << pose.x_ << " " << pose.y_ << " "
+    //           << pose.theta_ << std::endl;
+    pose.x_ -= cur_odom_pose_.x_;
+    pose.y_ -= cur_odom_pose_.y_;
+    pose.theta_ -= cur_odom_pose_.theta_;
+    normalizeTheta(pose.theta_);
+
+    geometry_msgs::TransformStamped transform_stamped;
+    convert(pose, transform_stamped);
+
+    tf_broadcaster_.sendTransform(transform_stamped);
+  }
+
+public:
+  // Convertion functions between datatypes
+  void convert(geometry_msgs::TransformStamped transform_stamped,
+               Stamped2DPose& pose)
+  {
+    pose.timestamp_ = transform_stamped.header.stamp.toSec();
+    pose.x_ = transform_stamped.transform.translation.x;
+    pose.y_ = transform_stamped.transform.translation.y;
+
+    tf2::Quaternion q(transform_stamped.transform.rotation.x,
+                      transform_stamped.transform.rotation.y,
+                      transform_stamped.transform.rotation.z,
+                      transform_stamped.transform.rotation.w);
+    tf2::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    pose.theta_ = yaw;
+  }
+
+  void convert(Stamped2DPose pose,
+               geometry_msgs::TransformStamped& transform_stamped)
+  {
+    transform_stamped.header.stamp = ros::Time::now();
+    transform_stamped.header.frame_id = map_frame_;
+
+    transform_stamped.child_frame_id = odom_frame_;
+
+    transform_stamped.transform.translation.x = pose.x_;
+    transform_stamped.transform.translation.y = pose.y_;
+    transform_stamped.transform.translation.z = 0.0;
+
+    tf2::Quaternion q;
+    q.setRPY(0, 0, pose.theta_);
+    transform_stamped.transform.rotation.x = q.x();
+    transform_stamped.transform.rotation.y = q.y();
+    transform_stamped.transform.rotation.z = q.z();
+    transform_stamped.transform.rotation.w = q.w();
+  }
 };
 
 }  // namespace my_gmapping

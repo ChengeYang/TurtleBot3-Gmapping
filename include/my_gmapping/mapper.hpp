@@ -60,8 +60,9 @@ public:
   double y_min_;
 
   // Map always centered at (0, 0)
-  int x_size_;
-  int y_size_;
+  // map_[0] is the grid at (x_min_, y_min_)
+  size_t x_size_;
+  size_t y_size_;
   std::vector<double> map_;
 
 public:
@@ -84,17 +85,13 @@ public:
   }
 
 public:
-  std::vector<double> getMap()
-  {
-    return map_;
-  }
-
   // Convert [x, y] position to the index of map vector
-  int posToIndex(double x, double y)
+  int posToIndex(double x, double y) const
   {
     int x_index = std::floor((x - x_min_) / resolution_);
     int y_index = std::floor((y - y_min_) / resolution_);
-    return x_index * y_size_ + y_index;
+
+    return y_index * x_size_ + x_index;
   }
 };
 

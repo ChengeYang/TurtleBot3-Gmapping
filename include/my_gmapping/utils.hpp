@@ -41,6 +41,8 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
+#include <math.h>
+
 namespace my_gmapping
 {
 // Class for representing robot pose [timestamp, x, y, theta]
@@ -62,6 +64,15 @@ public:
   {
   }
 };
+
+// Normalize angle to stay in [-pi, +pi]
+double normalizeTheta(double& theta)
+{
+  if (theta > M_PI)
+    theta -= 2 * M_PI;
+  if (theta < -M_PI)
+    theta += 2 * M_PI;
+}
 
 }  // namespace my_gmapping
 

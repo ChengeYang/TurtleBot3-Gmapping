@@ -66,6 +66,10 @@ public:
   std::shared_ptr<MotionModel> motion_model_;
   std::shared_ptr<MeasurementModel> measurement_model_;
 
+  // Robot pose and map estimate
+  Stamped2DPose pose_;
+  Mapper mapper_;
+
 public:
   // Constructor
   ParticleFilter()
@@ -82,35 +86,70 @@ public:
                        double theta, double resolution, double x_max,
                        double x_min, double y_max, double y_min)
   {
+    // Initialize particle set
+    Stamped2DPose init_pose(timestamp, x, y, theta);
+    Mapper init_mapper(resolution, x_max, x_min, y_max, y_min);
+    double weight = 1.0 / num_particles;
     for (int i = 0; i < num_particles; i++)
     {
-      Stamped2DPose init_pose(timestamp, x, y, theta);
-      Mapper mapper(resolution, x_max, x_min, y_max, y_min);
-      double weight = 1.0 / num_particles;
-      particle_set_.push_back(Particle(init_pose, mapper, weight));
+      particle_set_.push_back(Particle(init_pose, init_mapper, weight));
     }
+
+    // Initialize robot pose and map estimate
+    pose_ = init_pose;
+    mapper_ = init_mapper;
+  }
+
+  void update(const sensor_msgs::LaserScan& msg,
+              const Stamped2DPose& pre_odom_pose,
+              const Stamped2DPose& cur_odom_pose)
+  {
+    for (size_t i = 0; i < particle_set_.size(); i++)
+    {
+      motionUpdate(particle_set_[i], pre_odom_pose, cur_odom_pose);
+      scanMatch(particle_set_[i]);
+      weightUpdate(particle_set_[i]);
+      mapUpdate(particle_set_[i], msg);
+    }
+    particleResample();
   }
 
 public:
   // Functions related with FastSLAM algorithm
-  void motionUpdate()
+  void motionUpdate(Particle& particle, const Stamped2DPose& pre_odom_pose,
+                    const Stamped2DPose& cur_odom_pose)
+  {
+    motion_model_->sampleMotionModel(particle, pre_odom_pose, cur_odom_pose);
+  }
+
+  void scanMatch(Particle& particle)
   {
   }
 
-  void scanMatch()
+  void weightUpdate(Particle& particle)
   {
   }
 
-  void weightUpdate()
+  void mapUpdate(Particle& particle, const sensor_msgs::LaserScan& msg)
   {
+    measurement_model_->addScanToMap(particle, msg);
   }
 
   void particleResample()
   {
-  }
-
-  void mapUpdate()
-  {
+    // Update current estimate
+    int particle_idx = 0;
+    double max_weight = 0;
+    for (size_t i = 0; i < particle_set_.size(); i++)
+    {
+      if (particle_set_[i].weight_ > max_weight)
+      {
+        particle_idx = i;
+        max_weight = particle_set_[i].weight_;
+      }
+    }
+    pose_ = particle_set_[particle_idx].cur_pose_;
+    mapper_ = particle_set_[particle_idx].mapper_;
   }
 };
 
