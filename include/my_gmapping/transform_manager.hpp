@@ -99,14 +99,14 @@ public:
   // Read odometry data from /tf and convert to Stamped2DPose
   bool getOdometryData()
   {
-    geometry_msgs::TransformStamped temp_transform;
-    Stamped2DPose temp_pose;
+    geometry_msgs::TransformStamped transform;
+    Stamped2DPose pose;
 
     try
     {
-      temp_transform = tf_buffer_.lookupTransform(
+      transform = tf_buffer_.lookupTransform(
           odom_frame_, base_frame_, ros::Time(0), ros::Duration(0.1));
-      convert(temp_transform, temp_pose);
+      convert(transform, pose);
     }
     catch (const std::exception& e)
     {
@@ -116,8 +116,8 @@ public:
 
     pre_odom_transform_ = cur_odom_transform_;
     pre_odom_pose_ = cur_odom_pose_;
-    cur_odom_transform_ = temp_transform;
-    cur_odom_pose_ = temp_pose;
+    cur_odom_transform_ = transform;
+    cur_odom_pose_ = pose;
 
     return true;
   }

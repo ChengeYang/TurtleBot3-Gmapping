@@ -52,6 +52,10 @@
 
 #include "sensor_msgs/LaserScan.h"
 #include "nav_msgs/OccupancyGrid.h"
+#include "geometry_msgs/Point.h"
+#include "visualization_msgs/Marker.h"
+
+#include <tf2/LinearMath/Quaternion.h>
 
 #include "my_gmapping/class_manager.hpp"
 
@@ -70,6 +74,7 @@ public:
   // Publishers
   // /map: [nav_msgs/OccupancyGrid]
   ros::Publisher map_pub_;
+  ros::Publisher particles_marker_pub_;
 
 public:
   // Launch file parameters
@@ -98,6 +103,14 @@ public:
 
   // Measurement model
   double laser_range_max_;
+  double laser_range_min_;
+  // Log odds information for initial, free and occupied grid
+  double l_free_;
+  double l_occupied_;
+
+  // Scan Matcher
+  int max_iter_;
+  double error_threshold_;
 
   // Particle Filter
   int num_particles_;
@@ -128,10 +141,17 @@ public:
     nh_.getParam("motion_noise_r_t", motion_noise_r_t_);
     nh_.getParam("motion_noise_r_r", motion_noise_r_r_);
     nh_.getParam("laser_range_max", laser_range_max_);
+    nh_.getParam("laser_range_min", laser_range_min_);
+    nh_.getParam("l_free", l_free_);
+    nh_.getParam("l_occupied", l_occupied_);
+    nh_.getParam("max_iter", max_iter_);
+    nh_.getParam("error_threshold", error_threshold_);
     nh_.getParam("num_particles", num_particles_);
 
     // Publisher
     map_pub_ = nh_.advertise<nav_msgs::OccupancyGrid>("/my_gmapping/map", 1);
+    particles_marker_pub_ =
+        nh_.advertise<visualization_msgs::Marker>("/my_gmapping/particles", 1);
   }
 
   void init()
@@ -142,7 +162,8 @@ public:
     class_manager_->initMotionModel(motion_noise_t_t_, motion_noise_x_y_,
                                     motion_noise_t_r_, motion_noise_r_t_,
                                     motion_noise_r_r_);
-    class_manager_->initMeasurementModel(laser_range_max_);
+    class_manager_->initMeasurementModel(laser_range_max_, laser_range_min_, l_free_, l_occupied_);
+    class_manager_->initScanMatcher(max_iter_, error_threshold_);
     class_manager_->initParticleFilter(
         num_particles_,
         class_manager_->transform_manager_->cur_odom_pose_.timestamp_,
@@ -176,10 +197,7 @@ public:
   {
     // Read odometry data from tf
     if (!class_manager_->transform_manager_->getOdometryData())
-    {
-      std::cerr << "Fail to get odometry data" << std::endl;
       return;
-    }
 
     // Conduct update in Particle Filter
     class_manager_->particle_filter_->update(
@@ -195,6 +213,9 @@ public:
 
     // Publish map estimate to /my_gmapping/map
     publishMap(class_manager_->particle_filter_->mapper_);
+
+    // Publish particle cloud to /my_gmapping/particles
+    publishParticles(class_manager_->particle_filter_->particle_set_);
   }
 
   void publishMap(const Mapper& mapper)
@@ -218,18 +239,51 @@ public:
     map_msg.data.resize(map_msg.info.width * map_msg.info.height);
     for (size_t i = 0; i < mapper.map_.size(); i++)
     {
-      // Obstacle
+      // Free
       if (mapper.map_[i] < 0.0)
         map_msg.data[i] = -1;
       // Unknown
       else if (mapper.map_[i] < 0.25)
         map_msg.data[i] = 0;
-      // Free
+      // Obstacle
       else
         map_msg.data[i] = 100;
     }
 
     map_pub_.publish(map_msg);
+  }
+
+  void publishParticles(const std::vector<Particle>& particle_set)
+  {
+    visualization_msgs::Marker particles_marker;
+
+    particles_marker.header.stamp = ros::Time::now();
+    particles_marker.header.frame_id = map_frame_;
+
+    particles_marker.ns = "my_gmapping";
+    particles_marker.id = 0;
+    particles_marker.type = visualization_msgs::Marker::POINTS;
+    particles_marker.action = visualization_msgs::Marker::ADD;
+    particles_marker.pose.orientation.w = 1.0;
+
+    particles_marker.scale.x = 0.02;
+    particles_marker.scale.y = 0.02;
+
+    particles_marker.color.r = 1.0;
+    particles_marker.color.a = 1.0;
+
+    for (size_t i = 0; i < particle_set.size(); i++)
+    {
+      geometry_msgs::Point point_msg;
+
+      point_msg.x = particle_set[i].cur_pose_.x_;
+      point_msg.y = particle_set[i].cur_pose_.y_;
+      point_msg.z = 0.0;
+
+      particles_marker.points.push_back(point_msg);
+    }
+
+    particles_marker_pub_.publish(particles_marker);
   }
 };
 

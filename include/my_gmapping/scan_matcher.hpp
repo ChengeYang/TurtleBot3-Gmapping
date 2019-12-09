@@ -32,85 +32,51 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Map class for maintaining and updating 2D Grid map.
+ * Iterative Closest Point (ICP) based 2D scan matching algorithm.
  *
  * Author: Chenge Yang
  * Email: chengeyang2019@u.northwestern.edu
  ****************************************************************************/
 
-#ifndef Mapper_HPP
-#define Mapper_HPP
-
-#include <iostream>
-
-#include <ros/ros.h>
-
-#include <vector>
+#ifndef SCAN_MATCHER_HPP
+#define SCAN_MATCHER_HPP
 
 namespace my_gmapping
 {
-class Mapper
+class ScanMatcher
 {
 public:
-  // Input map parameters
-  double resolution_;
-  double x_max_;
-  double x_min_;
-  double y_max_;
-  double y_min_;
-
-  // Map always centered at (0, 0)
-  // map_[0] is the grid at (x_min_, y_min_)
-  size_t x_size_;
-  size_t y_size_;
-  std::vector<double> map_;
+  int max_iter_;
+  double error_threshold_;
 
 public:
   // Constructor
-  Mapper()
+  ScanMatcher()
   {
   }
 
-  Mapper(double resolution, double x_max, double x_min, double y_max,
-         double y_min)
-    : resolution_(resolution)
-    , x_max_(x_max)
-    , x_min_(x_min)
-    , y_max_(y_max)
-    , y_min_(y_min)
-    , x_size_(std::ceil((x_max - x_min) / resolution_))
-    , y_size_(std::ceil((y_max - y_min) / resolution_))
-    , map_(x_size_ * y_size_, 0)
+  ScanMatcher(int max_iter, double error_threshold)
+    : max_iter_(max_iter), error_threshold_(error_threshold)
   {
   }
 
 public:
-  // Convert [x, y] coordinate to the index of map vector
-  int xyToVectorIndex(double x, double y) const
+  // Fit data to model by ICP, return data->model transform.
+  bool icpMatching(const PointCloudXY& model, const PointCloudXY& data,
+                   Stamped2DPose& transform)
   {
-    if (x_min_ >= x or x >= x_max_ or y_min_ >= y or y >= y_max_)
-      return -1;
+    // std::cerr << model.size_ << " " << data.size_ << std::endl;
+    // Fail if input data has less than two points
+    if (model.size_ < 2 or data.size_ < 2)
+      return false;
 
-    int x_index = std::floor((x - x_min_) / resolution_);
-    int y_index = std::floor((y - y_min_) / resolution_);
+    PointCloudXY model_matched_points;
+    PointCloudXY data_matched_points;
 
-    return y_index * x_size_ + x_index;
-  }
+    for (size_t iter = 0; iter < max_iter_; iter++)
+    {
 
-  // Convert [x, y] matrix index to the index of map vector
-  int xyToVectorIndex(int x_index, int y_index) const
-  {
-    return y_index * x_size_ + x_index;
-  }
-
-  // Convert index of map vector to the [x, y] coordinate of grid center
-  void vectorIndexToXY(int index, double& x, double& y) const
-  {
-    int x_index = index % x_size_;
-    int y_index = index / x_size_;
-
-    x = x_index * resolution_ + x_min_ + resolution_ / 2.0;
-    y = y_index * resolution_ + y_min_ + resolution_ / 2.0;
+    }
   }
 };
 

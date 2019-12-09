@@ -55,7 +55,7 @@ class Particle
 public:
   // Current and previous robot pose: [x, y, theta]
   Stamped2DPose cur_pose_;
-  Stamped2DPose pre_pose_;
+  Stamped2DPose pre_pose_;  // TODO: pre_pose_ can be discarded
 
   // Map
   Mapper mapper_;
@@ -69,7 +69,7 @@ public:
   {
   }
 
-  Particle(const Stamped2DPose& init_pose, const Mapper& mapper, double weight)
+  Particle(Stamped2DPose init_pose, Mapper mapper, double weight)
     : cur_pose_(init_pose)
     , pre_pose_(init_pose)
     , mapper_(mapper)

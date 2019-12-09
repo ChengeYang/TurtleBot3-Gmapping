@@ -38,8 +38,8 @@
  * Email: chengeyang2019@u.northwestern.edu
  ****************************************************************************/
 
-#ifndef MOTION_HPP
-#define MOTION_HPP
+#ifndef MOTION_MODEL_HPP
+#define MOTION_MODEL_HPP
 
 #include <iostream>
 #include <random>

@@ -51,6 +51,7 @@
 #include "my_gmapping/transform_manager.hpp"
 #include "my_gmapping/motion_model.hpp"
 #include "my_gmapping/measurement_model.hpp"
+#include "my_gmapping/scan_matcher.hpp"
 #include "my_gmapping/particle_filter.hpp"
 
 namespace my_gmapping
@@ -62,6 +63,7 @@ public:
   std::shared_ptr<TransformManager> transform_manager_;
   std::shared_ptr<MotionModel> motion_model_;
   std::shared_ptr<MeasurementModel> measurement_model_;
+  std::shared_ptr<ScanMatcher> scan_matcher_;
   std::shared_ptr<ParticleFilter> particle_filter_;
 
 public:
@@ -87,9 +89,16 @@ public:
         motion_noise_r_r);
   }
 
-  void initMeasurementModel(double laser_range_max)
+  void initMeasurementModel(double laser_range_max, double laser_range_min,
+                            double l_free, double l_occupied)
   {
-    measurement_model_ = std::make_shared<MeasurementModel>(laser_range_max);
+    measurement_model_ = std::make_shared<MeasurementModel>(
+        laser_range_max, laser_range_min, l_free, l_occupied);
+  }
+
+  void initScanMatcher(int max_iter, double error_threshold)
+  {
+    scan_matcher_ = std::make_shared<ScanMatcher>(max_iter, error_threshold);
   }
 
   void initParticleFilter(int num_particles, double timestamp, double x,
@@ -97,8 +106,8 @@ public:
                           double x_max, double x_min, double y_max,
                           double y_min)
   {
-    particle_filter_ =
-        std::make_shared<ParticleFilter>(motion_model_, measurement_model_);
+    particle_filter_ = std::make_shared<ParticleFilter>(
+        motion_model_, measurement_model_, scan_matcher_);
     particle_filter_->initParticleSet(num_particles, timestamp, x, y, theta,
                                       resolution, x_max, x_min, y_max, y_min);
   }

@@ -24,9 +24,16 @@
 
     <!-- Measurement model parameters -->
     <param name="laser_range_max" value="3.5"/>
+    <param name="laser_range_min" value="0.1"/>
+    <param name="l_free" value="-0.8"/>
+    <param name="l_occupied" value="1.0"/>
+
+    <!-- ICP scan matcher parameters -->
+    <param name="max_iter" value="10"/>
+    <param name="error_threshold" value="1.0"/>
 
     <!-- Particle Filter parameters -->
-    <param name="num_particles" value="1"/>
+    <param name="num_particles" value="10"/>
   </node>
 
 </launch>

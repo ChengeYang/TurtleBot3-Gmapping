@@ -43,6 +43,8 @@
 
 #include <math.h>
 
+#include <sensor_msgs/LaserScan.h>
+
 namespace my_gmapping
 {
 // Class for representing robot pose [timestamp, x, y, theta]
@@ -65,12 +67,69 @@ public:
   }
 };
 
+// Class to process and store readings from laser scan input
+class LaserScanReading
+{
+public:
+  std::vector<double> ranges_;
+  std::vector<double> bearings_;
+
+public:
+  LaserScanReading()
+  {
+  }
+
+  LaserScanReading(const sensor_msgs::LaserScan& msg, double laser_range_max,
+                   double laser_range_min)
+  {
+    for (size_t i = 0; i < msg.ranges.size(); i++)
+    {
+      if (laser_range_min <= msg.ranges[i] && msg.range_min <= msg.ranges[i] &&
+          msg.ranges[i] <= laser_range_max && msg.ranges[i] <= msg.range_max)
+      {
+        ranges_.push_back(msg.ranges[i]);
+        bearings_.push_back(msg.angle_min + i * msg.angle_increment);
+      }
+    }
+  }
+};
+
+// Class to record 2D (x, y) PointCloud in active area for scan matching
+class PointCloudXY
+{
+public:
+  int size_;
+  std::vector<double> xs_;
+  std::vector<double> ys_;
+
+public:
+  PointCloudXY()
+  {
+  }
+
+  void clearData()
+  {
+    size_ = 0;
+    xs_.clear();
+    ys_.clear();
+  }
+};
+
 // Normalize angle to stay in [-pi, +pi]
 double normalizeTheta(double& theta)
 {
   if (theta > M_PI)
     theta -= 2 * M_PI;
-  if (theta < -M_PI)
+  else if (theta < -M_PI)
+    theta += 2 * M_PI;
+}
+
+// Normalize angle to stay in [0, +2*pi]
+double normalizeTheta2(double& theta)
+{
+  if (theta > 2 * M_PI)
+    theta -= 2 * M_PI;
+  else if (theta < 0)
     theta += 2 * M_PI;
 }
 
