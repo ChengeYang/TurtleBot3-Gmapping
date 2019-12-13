@@ -16,21 +16,26 @@
     <param name="map_resolution" value="0.05"/>
 
     <!-- Motion model parameters -->
-    <param name="motion_noise_t_t" value="0.1"/>
-    <param name="motion_noise_x_y" value="0.03"/>
-    <param name="motion_noise_t_r" value="0.1"/>
-    <param name="motion_noise_r_t" value="0.2"/>
-    <param name="motion_noise_r_r" value="0.2"/>
+    <param name="motion_noise_t_t" value="0.05"/>
+    <param name="motion_noise_x_y" value="0.015"/>
+    <param name="motion_noise_t_r" value="0.05"/>
+    <param name="motion_noise_r_t" value="0.1"/>
+    <param name="motion_noise_r_r" value="0.1"/>
 
     <!-- Measurement model parameters -->
     <param name="laser_range_max" value="3.5"/>
     <param name="laser_range_min" value="0.1"/>
     <param name="l_free" value="-0.8"/>
     <param name="l_occupied" value="1.0"/>
+    <param name="measurement_noise_range" value="20"/>
+    <param name="measurement_noise_bearing" value="0.05"/>
 
     <!-- ICP scan matcher parameters -->
-    <param name="max_iter" value="10"/>
-    <param name="error_threshold" value="1.0"/>
+    <param name="max_iter" value="20"/>
+    <param name="max_matched_pts" value="30"/>
+    <param name="epsilon" value="1e-6"/>
+    <param name="termination_error" value="1e-3"/>
+    <param name="matching_factor" value="10.0"/>
 
     <!-- Particle Filter parameters -->
     <param name="num_particles" value="10"/>

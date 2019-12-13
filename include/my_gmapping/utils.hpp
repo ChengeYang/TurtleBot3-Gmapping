@@ -41,14 +41,53 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
+#define INV_SQRT_2PI 0.3989422804014327
+
 #include <math.h>
+
+#include <eigen3/Eigen/Core>
 
 #include <sensor_msgs/LaserScan.h>
 
 namespace my_gmapping
 {
+// Class for representing 2D point [x, y]
+class Point2D
+{
+public:
+  double x_;
+  double y_;
+
+public:
+  Point2D()
+  {
+  }
+
+  Point2D(double x, double y) : x_(x), y_(y)
+  {
+  }
+};
+
+// Class for representing robot pose [x, y, theta]
+class Pose2D
+{
+public:
+  double x_;
+  double y_;
+  double theta_;  // [-pi, pi]
+
+public:
+  Pose2D()
+  {
+  }
+
+  Pose2D(double x, double y, double theta) : x_(x), y_(y), theta_(theta)
+  {
+  }
+};
+
 // Class for representing robot pose [timestamp, x, y, theta]
-class Stamped2DPose
+class StampedPose2D
 {
 public:
   double timestamp_;
@@ -57,17 +96,17 @@ public:
   double theta_;  // [-pi, pi]
 
 public:
-  Stamped2DPose()
+  StampedPose2D()
   {
   }
 
-  Stamped2DPose(double timestamp, double x, double y, double theta)
+  StampedPose2D(double timestamp, double x, double y, double theta)
     : timestamp_(timestamp), x_(x), y_(y), theta_(theta)
   {
   }
 };
 
-// Class to process and store readings from laser scan input
+// Class to store readings from laser scan input
 class LaserScanReading
 {
 public:
@@ -77,41 +116,6 @@ public:
 public:
   LaserScanReading()
   {
-  }
-
-  LaserScanReading(const sensor_msgs::LaserScan& msg, double laser_range_max,
-                   double laser_range_min)
-  {
-    for (size_t i = 0; i < msg.ranges.size(); i++)
-    {
-      if (laser_range_min <= msg.ranges[i] && msg.range_min <= msg.ranges[i] &&
-          msg.ranges[i] <= laser_range_max && msg.ranges[i] <= msg.range_max)
-      {
-        ranges_.push_back(msg.ranges[i]);
-        bearings_.push_back(msg.angle_min + i * msg.angle_increment);
-      }
-    }
-  }
-};
-
-// Class to record 2D (x, y) PointCloud in active area for scan matching
-class PointCloudXY
-{
-public:
-  int size_;
-  std::vector<double> xs_;
-  std::vector<double> ys_;
-
-public:
-  PointCloudXY()
-  {
-  }
-
-  void clearData()
-  {
-    size_ = 0;
-    xs_.clear();
-    ys_.clear();
   }
 };
 
@@ -131,6 +135,62 @@ double normalizeTheta2(double& theta)
     theta -= 2 * M_PI;
   else if (theta < 0)
     theta += 2 * M_PI;
+}
+
+// Transform robot coordinate [x, y] to translation vector t
+Eigen::Vector3d xyToTranslationVector(double x, double y)
+{
+  Eigen::Vector3d t(x, y, 0.0);
+  return t;
+}
+
+// Transform yaw angle theta to rotation matrix R
+Eigen::Matrix3d thetaToRotationMatrix(double theta)
+{
+  Eigen::Matrix3d R;
+  R << std::cos(theta), -std::sin(theta), 0, std::sin(theta), std::cos(theta),
+      0, 0, 0, 1;
+  return R;
+}
+
+// Transform robot pose by R & t
+void transformPose(const Eigen::Matrix3d& R, const Eigen::Vector3d& t,
+                   StampedPose2D& pose)
+{
+  // Transfer pose into R & t
+  Eigen::Vector3d t_pose = xyToTranslationVector(pose.x_, pose.y_);
+  Eigen::Matrix3d R_pose = thetaToRotationMatrix(pose.theta_);
+
+  R_pose = R_pose * R;
+  t_pose = R_pose * t + t_pose;
+
+  pose.x_ = t_pose[0];
+  pose.y_ = t_pose[1];
+  pose.theta_ = atan2(R_pose(1, 0), R_pose(0, 0));
+}
+
+// Transform robot pose by R & t
+void transformPose(const Eigen::Matrix3d& R, const Eigen::Vector3d& t,
+                   const StampedPose2D& pose_init,
+                   StampedPose2D& pose_transform)
+{
+  // Transfer initial pose into R & t
+  Eigen::Vector3d t_pose = xyToTranslationVector(pose_init.x_, pose_init.y_);
+  Eigen::Matrix3d R_pose = thetaToRotationMatrix(pose_init.theta_);
+
+  R_pose = R_pose * R;
+  t_pose = R_pose * t + t_pose;
+
+  pose_transform.x_ = t_pose[0];
+  pose_transform.y_ = t_pose[1];
+  pose_transform.theta_ = atan2(R_pose(1, 0), R_pose(0, 0));
+}
+
+// Return probability of x from Gaussian PDF(mean, variance)
+double computeGaussianLikelihood(double x, double mean, double variance)
+{
+  double temp = (x - mean) / variance;
+  return INV_SQRT_2PI / variance * std::exp(-0.5 * temp * temp);
 }
 
 }  // namespace my_gmapping

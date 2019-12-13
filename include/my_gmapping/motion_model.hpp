@@ -44,6 +44,9 @@
 #include <iostream>
 #include <random>
 
+#include <eigen3/Eigen/Core>
+#include <Eigen/Eigenvalues>
+
 #include "my_gmapping/particle.hpp"
 #include "my_gmapping/utils.hpp"
 
@@ -75,42 +78,163 @@ public:
   }
 
 public:
-  // Update particle pose through the change in odometry data reading
-  void sampleMotionModel(Particle& particle, const Stamped2DPose& pre_odom_pose,
-                         const Stamped2DPose& cur_odom_pose)
+  // Update robot pose through the change in odometry data reading
+  StampedPose2D updateMotionModel(const StampedPose2D& pose,
+                                  const StampedPose2D& pre_odom_pose,
+                                  const StampedPose2D& cur_odom_pose)
   {
-    // Increment
-    double delta_x = cur_odom_pose.x_ - pre_odom_pose.x_;
-    double delta_y = cur_odom_pose.y_ - pre_odom_pose.y_;
-    double delta_theta = cur_odom_pose.theta_ - pre_odom_pose.theta_;
-    normalizeTheta(delta_theta);
+    // Control
+    double control_x = cur_odom_pose.x_ - pre_odom_pose.x_;
+    double control_y = cur_odom_pose.y_ - pre_odom_pose.y_;
+    double control_theta = cur_odom_pose.theta_ - pre_odom_pose.theta_;
+    normalizeTheta(control_theta);
 
-    // Increment added with noise
-    delta_x +=
-        sampleGaussian(noise_t_t_ * fabs(delta_x) + noise_x_y_ * fabs(delta_y) +
-                       noise_t_r_ * fabs(delta_theta));
-    delta_y +=
-        sampleGaussian(noise_x_y_ * fabs(delta_x) + noise_t_t_ * fabs(delta_y) +
-                       noise_t_r_ * fabs(delta_theta));
-    delta_theta += sampleGaussian(
-        noise_r_t_ * sqrt(delta_x * delta_x + delta_y * delta_y) +
-        noise_r_r_ * fabs(delta_theta));
-    normalizeTheta(delta_theta);
-
-    particle.pre_pose_ = particle.cur_pose_;
-
-    particle.cur_pose_.timestamp_ = cur_odom_pose.timestamp_;
-    particle.cur_pose_.x_ += delta_x;
-    particle.cur_pose_.y_ += delta_y;
-    particle.cur_pose_.theta_ += delta_theta;
-    normalizeTheta(particle.cur_pose_.theta_);
+    StampedPose2D pose_new;
+    pose_new.timestamp_ = cur_odom_pose.timestamp_;
+    pose_new.x_ = pose.x_ + control_x;
+    pose_new.y_ = pose.y_ + control_y;
+    pose_new.theta_ = pose.theta_ + control_theta;
+    normalizeTheta(pose_new.theta_);
+    return pose_new;
   }
 
-  // Return random Gaussian noise with mean = 0
-  double sampleGaussian(double covariance)
+  // Get robot pose initial guess through the change in odometry data reading
+  // Add Gaussian noise
+  StampedPose2D sampleMotionModel(const StampedPose2D& pose,
+                                  const StampedPose2D& pre_odom_pose,
+                                  const StampedPose2D& cur_odom_pose)
   {
-    std::normal_distribution<double> distribution(0, covariance);
+    // Control
+    double control_x = cur_odom_pose.x_ - pre_odom_pose.x_;
+    double control_y = cur_odom_pose.y_ - pre_odom_pose.y_;
+    double control_theta = cur_odom_pose.theta_ - pre_odom_pose.theta_;
+    normalizeTheta(control_theta);
+
+    // Noise variance
+    double var_x = noise_t_t_ * fabs(control_x) + noise_x_y_ * fabs(control_y) +
+                   noise_t_r_ * fabs(control_theta);
+    double var_y = noise_x_y_ * fabs(control_x) + noise_t_t_ * fabs(control_y) +
+                   noise_t_r_ * fabs(control_theta);
+    double var_theta =
+        noise_r_t_ * sqrt(control_x * control_x + control_y * control_y) +
+        noise_r_r_ * fabs(control_theta);
+
+    // Control added with noise
+    control_x += sampleGaussian(0, var_x);
+    control_y += sampleGaussian(0, var_y);
+    control_theta += sampleGaussian(0, var_theta);
+
+    StampedPose2D pose_sample;
+    pose_sample.timestamp_ = cur_odom_pose.timestamp_;
+    pose_sample.x_ = pose.x_ + control_x;
+    pose_sample.y_ = pose.y_ + control_y;
+    pose_sample.theta_ = pose.theta_ + control_theta;
+    normalizeTheta(pose_sample.theta_);
+    return pose_sample;
+  }
+
+  // Motion model odometry: Probabilistic Robotics P134 Table5.5
+  // Compute the likelihood P(Xt|Xt-1, Ut-1)
+  double computePoseLikelihood(const StampedPose2D& pre_pose,
+                               const StampedPose2D& cur_pose,
+                               const StampedPose2D& pre_odom_pose,
+                               const StampedPose2D& cur_odom_pose)
+  {
+    // Control
+    double control_x = cur_odom_pose.x_ - pre_odom_pose.x_;
+    double control_y = cur_odom_pose.y_ - pre_odom_pose.y_;
+    double control_theta = cur_odom_pose.theta_ - pre_odom_pose.theta_;
+    normalizeTheta(control_theta);
+
+    // Difference between current and previous pose
+    double delta_x = cur_pose.x_ - pre_pose.x_;
+    double delta_y = cur_pose.y_ - pre_pose.y_;
+    double delta_theta = cur_pose.theta_ - pre_pose.theta_;
+    normalizeTheta(delta_theta);
+
+    // Noise variance
+    double var_x = noise_t_t_ * fabs(delta_x) + noise_x_y_ * fabs(delta_y) +
+                   noise_t_r_ * fabs(delta_theta);
+    double var_y = noise_x_y_ * fabs(delta_x) + noise_t_t_ * fabs(delta_y) +
+                   noise_t_r_ * fabs(delta_theta);
+    double var_theta =
+        noise_r_t_ * sqrt(delta_x * delta_x + delta_y * delta_y) +
+        noise_r_r_ * fabs(delta_theta);
+
+    // Probability
+    double p_x = computeGaussianLikelihood(control_x, delta_x, var_x);
+    double p_y = computeGaussianLikelihood(control_y, delta_y, var_y);
+    double p_theta =
+        computeGaussianLikelihood(control_theta, delta_theta, var_theta);
+
+    return p_x * p_y * p_theta;
+  }
+
+  // Generate random pose samples within given range
+  std::vector<StampedPose2D>
+  generateRandomPoseSamples(const StampedPose2D& pose, int num_samples,
+                            double range_x, double range_y, double range_theta)
+  {
+    std::vector<StampedPose2D> poses;
+
+    for (size_t i = 0; i < num_samples; i++)
+    {
+      StampedPose2D pose_random;
+      pose_random.x_ = generateRandomNumber(pose.x_, range_x);
+      pose_random.y_ = generateRandomNumber(pose.y_, range_y);
+      pose_random.theta_ = generateRandomNumber(pose.theta_, range_theta);
+      normalizeTheta(pose_random.theta_);
+      poses.push_back(pose_random);
+    }
+
+    return poses;
+  }
+
+  // Sample new pose from multivariant Gaussian proposal
+  StampedPose2D sampleGaussianProposal(const Eigen::Vector3d& mu,
+                                       const Eigen::Matrix3d& sigma)
+  {
+    Eigen::Vector3d pose_eigen = sampleMultivariantGaussian(mu, sigma);
+
+    StampedPose2D pose_new;
+    pose_new.x_ = pose_eigen[0];
+    pose_new.y_ = pose_eigen[1];
+    pose_new.theta_ = pose_eigen[2];
+
+    return pose_new;
+  }
+
+public:
+  // Return random Gaussian noise with (mean, variance)
+  double sampleGaussian(double mean, double variance)
+  {
+    std::normal_distribution<double> distribution(mean, variance);
     return distribution(generator_);
+  }
+
+  // Generate random number within [mean-range, mean+range]
+  double generateRandomNumber(double mean, double range)
+  {
+    std::uniform_real_distribution<double> distribution(mean - range,
+                                                        mean + range);
+    return distribution(generator_);
+  }
+
+  // Sample from multivariant Gaussian distribution given mean and covaraince
+  Eigen::Vector3d sampleMultivariantGaussian(const Eigen::Vector3d& mean,
+                                             const Eigen::Matrix3d& covariance)
+  {
+    Eigen::Matrix3d transform;
+
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigenSolver(covariance);
+    transform = eigenSolver.eigenvectors() *
+                eigenSolver.eigenvalues().cwiseSqrt().asDiagonal();
+
+    std::normal_distribution<double> distribution;
+
+    return mean + transform * Eigen::Vector3d(distribution(generator_),
+                                              distribution(generator_),
+                                              distribution(generator_));
   }
 };
 

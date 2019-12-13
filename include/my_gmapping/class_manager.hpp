@@ -90,15 +90,20 @@ public:
   }
 
   void initMeasurementModel(double laser_range_max, double laser_range_min,
-                            double l_free, double l_occupied)
+                            double l_free, double l_occupied,
+                            double measurement_noise_range,
+                            double measurement_noise_bearing)
   {
     measurement_model_ = std::make_shared<MeasurementModel>(
-        laser_range_max, laser_range_min, l_free, l_occupied);
+        laser_range_max, laser_range_min, l_free, l_occupied,
+        measurement_noise_range, measurement_noise_bearing);
   }
 
-  void initScanMatcher(int max_iter, double error_threshold)
+  void initScanMatcher(int max_iter, int max_matched_pts, double epsilon,
+                       double termination_error, double matching_factor)
   {
-    scan_matcher_ = std::make_shared<ScanMatcher>(max_iter, error_threshold);
+    scan_matcher_ = std::make_shared<ScanMatcher>(
+        max_iter, max_matched_pts, epsilon, termination_error, matching_factor);
   }
 
   void initParticleFilter(int num_particles, double timestamp, double x,

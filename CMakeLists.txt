@@ -7,6 +7,8 @@ add_compile_options(-std=c++14)
 
 #########################################################################
 # Search for everything we need to build the package
+find_package(Eigen3 REQUIRED)
+find_package(PCL REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
@@ -29,6 +31,8 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
+  ${PCL_INCLUDE_DIRS}
 )
 
 #########################################################################
@@ -38,4 +42,6 @@ add_executable(my_gmapping
 )
 target_link_libraries(my_gmapping
   ${catkin_LIBRARIES}
+  ${EIGEN3_LIBS}
+  ${PCL_LIBRARIES}
 )

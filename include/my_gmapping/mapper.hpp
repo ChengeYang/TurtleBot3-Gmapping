@@ -85,7 +85,7 @@ public:
   }
 
 public:
-  // Convert [x, y] coordinate to the index of map vector
+  // Convert [x, y] coordinate to the grid vector index
   int xyToVectorIndex(double x, double y) const
   {
     if (x_min_ >= x or x >= x_max_ or y_min_ >= y or y >= y_max_)
@@ -97,13 +97,13 @@ public:
     return y_index * x_size_ + x_index;
   }
 
-  // Convert [x, y] matrix index to the index of map vector
+  // Convert [x, y] matrix index to the grid vector index
   int xyToVectorIndex(int x_index, int y_index) const
   {
     return y_index * x_size_ + x_index;
   }
 
-  // Convert index of map vector to the [x, y] coordinate of grid center
+  // Convert grid vector index to the [x, y] coordinate of grid center
   void vectorIndexToXY(int index, double& x, double& y) const
   {
     int x_index = index % x_size_;

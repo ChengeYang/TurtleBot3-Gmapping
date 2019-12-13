@@ -107,10 +107,16 @@ public:
   // Log odds information for initial, free and occupied grid
   double l_free_;
   double l_occupied_;
+  // Measurement model noise
+  double measurement_noise_range_;
+  double measurement_noise_bearing_;
 
   // Scan Matcher
   int max_iter_;
-  double error_threshold_;
+  int max_matched_pts_;
+  double epsilon_;
+  double termination_error_;
+  double matching_factor_;
 
   // Particle Filter
   int num_particles_;
@@ -144,8 +150,13 @@ public:
     nh_.getParam("laser_range_min", laser_range_min_);
     nh_.getParam("l_free", l_free_);
     nh_.getParam("l_occupied", l_occupied_);
+    nh_.getParam("measurement_noise_range", measurement_noise_range_);
+    nh_.getParam("measurement_noise_bearing", measurement_noise_bearing_);
     nh_.getParam("max_iter", max_iter_);
-    nh_.getParam("error_threshold", error_threshold_);
+    nh_.getParam("max_matched_pts", max_matched_pts_);
+    nh_.getParam("epsilon", epsilon_);
+    nh_.getParam("termination_error", termination_error_);
+    nh_.getParam("matching_factor", matching_factor_);
     nh_.getParam("num_particles", num_particles_);
 
     // Publisher
@@ -162,8 +173,11 @@ public:
     class_manager_->initMotionModel(motion_noise_t_t_, motion_noise_x_y_,
                                     motion_noise_t_r_, motion_noise_r_t_,
                                     motion_noise_r_r_);
-    class_manager_->initMeasurementModel(laser_range_max_, laser_range_min_, l_free_, l_occupied_);
-    class_manager_->initScanMatcher(max_iter_, error_threshold_);
+    class_manager_->initMeasurementModel(
+        laser_range_max_, laser_range_min_, l_free_, l_occupied_,
+        measurement_noise_range_, measurement_noise_bearing_);
+    class_manager_->initScanMatcher(max_iter_, max_matched_pts_, epsilon_,
+                                    termination_error_, matching_factor_);
     class_manager_->initParticleFilter(
         num_particles_,
         class_manager_->transform_manager_->cur_odom_pose_.timestamp_,

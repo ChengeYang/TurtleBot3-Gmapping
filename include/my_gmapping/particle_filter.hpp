@@ -45,6 +45,7 @@
 #include <random>
 
 #include <ros/ros.h>
+#include <eigen3/Eigen/Core>
 
 #include <sensor_msgs/LaserScan.h>
 
@@ -70,7 +71,7 @@ public:
   std::shared_ptr<ScanMatcher> scan_matcher_;
 
   // Robot pose and map estimate
-  Stamped2DPose pose_;
+  StampedPose2D pose_;
   Mapper mapper_;
 
   // Random number generater
@@ -98,7 +99,7 @@ public:
                        double x_min, double y_max, double y_min)
   {
     // Initialize particle set
-    Stamped2DPose init_pose(timestamp, x, y, theta);
+    StampedPose2D init_pose(timestamp, x, y, theta);
     Mapper init_mapper(resolution, x_max, x_min, y_max, y_min);
     double weight = 1.0 / num_particles;
     for (int i = 0; i < num_particles; i++)
@@ -112,9 +113,11 @@ public:
     mapper_ = init_mapper;
   }
 
+public:  // Functions related with FastSLAM algorithm
+  // The master update function of the algorithm
   void update(const sensor_msgs::LaserScan& msg,
-              const Stamped2DPose& pre_odom_pose,
-              const Stamped2DPose& cur_odom_pose)
+              const StampedPose2D& pre_odom_pose,
+              const StampedPose2D& cur_odom_pose)
   {
     LaserScanReading reading = measurement_model_->processScan(msg);
     if (reading.ranges_.size() < 1)
@@ -122,58 +125,119 @@ public:
 
     for (size_t i = 0; i < particle_set_.size(); i++)
     {
-      motionUpdate(particle_set_[i], pre_odom_pose, cur_odom_pose);
-      scanMatch(particle_set_[i], reading);
-      weightUpdate(particle_set_[i]);
-      mapUpdate(particle_set_[i], reading);
+      std::cerr << "/////////////////////////" << std::endl;
+      std::cerr << particle_set_[i].cur_pose_.x_ << " "
+                << particle_set_[i].cur_pose_.y_ << " "
+                << particle_set_[i].cur_pose_.theta_ << std::endl;
+
+      // Sample motion model to get initial guess of robot pose
+      StampedPose2D pose_init = motion_model_->sampleMotionModel(
+          particle_set_[i].cur_pose_, pre_odom_pose, cur_odom_pose);
+
+      // Convert data into 2D (x, y) pointcloud for ICP
+      std::vector<Eigen::Vector3d> model = measurement_model_->generateICPModel(
+          pose_init, particle_set_[i].mapper_);
+      std::vector<Eigen::Vector3d> data =
+          measurement_model_->generateICPData(pose_init, reading);
+
+      // ICP Scan match to find local maximum of observation likelihood function
+      // StampedPose2D pose_scan_match;
+      // bool icp_sign =
+      //     scan_matcher_->icpMatching(model, data, pose_init,
+      //     pose_scan_match);
+      StampedPose2D pose_scan_match = pose_init;
+      bool icp_sign = false;
+
+      // If scan match fails, use initial guess and update weight
+      if (icp_sign == false || (pose_scan_match.x_ - pose_init.x_) > 0.5 or
+          (pose_scan_match.y_ - pose_init.y_) > 0.5)
+      {
+        std::cerr << "Scan match Failed. Error exceed limit." << std::endl;
+        particle_set_[i].pre_pose_ = particle_set_[i].cur_pose_;
+        particle_set_[i].cur_pose_ = pose_init;
+        particle_set_[i].weight_ *= measurement_model_->computeScanLikelihood(
+            particle_set_[i].cur_pose_, particle_set_[i].mapper_, reading);
+      }
+      else
+      {
+        // Sample poses around initial estimate
+        std::vector<StampedPose2D> poses =
+            motion_model_->generateRandomPoseSamples(pose_scan_match, 30, 0.05,
+                                                     0.05, M_PI / 60.0);
+
+        // Compute Gaussian proposal
+        Eigen::Vector3d mu(0.0, 0.0, 0.0);
+        double eta = 0.0;
+        for (size_t j = 0; j < poses.size(); j++)
+        {
+          double p_motion = motion_model_->computePoseLikelihood(
+              particle_set_[i].cur_pose_, poses[j], pre_odom_pose,
+              cur_odom_pose);
+          double p_measurement = measurement_model_->computeScanLikelihood(
+              poses[j], particle_set_[i].mapper_, reading);
+
+          mu += Eigen::Vector3d(poses[j].x_, poses[j].y_, poses[j].theta_) *
+                p_motion * p_measurement;
+          eta += p_motion * p_measurement;
+        }
+        mu /= eta;
+        Eigen::Matrix3d sigma = Eigen::Matrix3d::Zero();
+        for (size_t j = 0; j < poses.size(); j++)
+        {
+          double p_motion = motion_model_->computePoseLikelihood(
+              particle_set_[i].cur_pose_, poses[j], pre_odom_pose,
+              cur_odom_pose);
+          double p_measurement = measurement_model_->computeScanLikelihood(
+              poses[j], particle_set_[i].mapper_, reading);
+
+          Eigen::Vector3d x_j(poses[j].x_, poses[j].y_, poses[j].theta_);
+          sigma +=
+              (x_j - mu) * ((x_j - mu).transpose()) * p_motion * p_measurement;
+        }
+        sigma /= eta;
+
+        // Sample new pose from Gaussian proposal
+        StampedPose2D pose_new =
+            motion_model_->sampleGaussianProposal(mu, sigma);
+        std::cerr << pose_new.x_ << " " << pose_new.y_ << " " << pose_new.theta_
+                  << std::endl;
+
+        // Update weight
+        particle_set_[i].weight_ *= eta;
+
+        // Update robot pose
+        particle_set_[i].pre_pose_ = particle_set_[i].cur_pose_;
+        particle_set_[i].cur_pose_ = pose_new;
+      }
+
+      // Map update
+      measurement_model_->integrateScan(particle_set_[i], reading);
     }
+
+    weightNormalize();
     stateUpdate();
     particleResample();
   }
 
-public:
-  // Functions related with FastSLAM algorithm
-  void motionUpdate(Particle& particle, const Stamped2DPose& pre_odom_pose,
-                    const Stamped2DPose& cur_odom_pose)
+  void weightNormalize()
   {
-    motion_model_->sampleMotionModel(particle, pre_odom_pose, cur_odom_pose);
-  }
-
-  void scanMatch(Particle& particle, const LaserScanReading& reading)
-  {
-    // Convert data into 2D (x, y) pointcloud
-    PointCloudXY model, data;
-    measurement_model_->generatePointCloudXY(particle, model);
-    measurement_model_->generatePointCloudXY(particle, reading, data);
-
-    // ICP
-    Stamped2DPose transform;
-    scan_matcher_->icpMatching(model, data, transform);
-  }
-
-  void weightUpdate(Particle& particle)
-  {
-    // Normalization
+    // Normalization of all particle weights
     double weight_sum = 0.0;
     for (size_t i = 0; i < particle_set_.size(); i++)
     {
       weight_sum += particle_set_[i].weight_;
     }
-    if (weight_sum < 0.000001)
-    {
-      for (size_t i = 0; i < particle_set_.size(); i++)
-        particle_set_[i].weight_ = 1.0 / num_particles_;
-    }
-    else
+
+    if (weight_sum > 0.0)
     {
       for (size_t i = 0; i < particle_set_.size(); i++)
         particle_set_[i].weight_ /= weight_sum;
     }
-  }
-
-  void mapUpdate(Particle& particle, const LaserScanReading& reading)
-  {
-    measurement_model_->integrateScan(particle, reading);
+    else
+    {
+      for (size_t i = 0; i < particle_set_.size(); i++)
+        particle_set_[i].weight_ = 1.0 / num_particles_;
+    }
   }
 
   void stateUpdate()
@@ -193,7 +257,7 @@ public:
     mapper_ = particle_set_[particle_idx].mapper_;
 
     // // Update current estimate to the average of all particles
-    // Stamped2DPose pose = particle_set_[0].cur_pose_;
+    // StampedPose2D pose = particle_set_[0].cur_pose_;
     // Mapper mapper = particle_set_[0].mapper_;
     // pose.x_ = 0;
     // pose.y_ = 0;

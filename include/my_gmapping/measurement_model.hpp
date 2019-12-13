@@ -41,8 +41,12 @@
 #ifndef MEASUREMENT_MODEL_HPP
 #define MEASUREMENT_MODEL_HPP
 
+#define BEAM_ANGLE 0.017453292519943
+
 #include <iostream>
 #include <cmath>
+
+#include <eigen3/Eigen/Core>
 
 #include <sensor_msgs/LaserScan.h>
 
@@ -60,77 +64,160 @@ public:
   // Log odds information for free and occupied grid
   double l_free_;
   double l_occupied_;
+  // Measurement model noise
+  double measurement_noise_range_;
+  double measurement_noise_bearing_;
 
 public:
+  // Constructor
   MeasurementModel()
   {
   }
 
   MeasurementModel(double laser_range_max, double laser_range_min,
-                   double l_free, double l_occupied)
+                   double l_free, double l_occupied,
+                   double measurement_noise_range,
+                   double measurement_noise_bearing)
     : laser_range_max_(laser_range_max)
     , laser_range_min_(laser_range_min)
     , l_free_(l_free)
     , l_occupied_(l_occupied)
+    , measurement_noise_range_(measurement_noise_range)
+    , measurement_noise_bearing_(measurement_noise_bearing)
   {
   }
 
 public:  // Funtions for process LaserScan sensor data
   // Transfer sensor_msgs::LaserScan to LaserScanReading datatype
+  // Here we assume that scan has 360 beams with angle of 360 degrees
   LaserScanReading processScan(const sensor_msgs::LaserScan& msg)
   {
-    return LaserScanReading(msg, laser_range_max_, laser_range_min_);
+    LaserScanReading reading;
+
+    for (size_t i = 0; i < msg.ranges.size(); i++)
+    {
+      // Filter beam that is outside the range
+      if (laser_range_min_ <= msg.ranges[i] && msg.range_min <= msg.ranges[i] &&
+          msg.ranges[i] <= laser_range_max_ && msg.ranges[i] <= msg.range_max)
+      {
+        reading.ranges_.push_back(msg.ranges[i]);
+        reading.bearings_.push_back(0.0 + i * BEAM_ANGLE);
+      }
+      else
+      {
+        reading.ranges_.push_back(laser_range_max_);
+        reading.bearings_.push_back(0.0 + i * BEAM_ANGLE);
+      }
+    }
+
+    return reading;
   }
 
-  // Generate 2D point cloud from particle and the map it brings (as ICP model)
-  void generatePointCloudXY(const Particle& particle, PointCloudXY& point_cloud)
+  // Generate expected laser reading from given pose and map
+  // Here we assume 360 beam angles in range [0, 2*pi]
+  LaserScanReading generateLaserReading(const StampedPose2D& pose,
+                                        const Mapper& mapper)
   {
-    point_cloud.xs_.clear();
-    point_cloud.ys_.clear();
+    LaserScanReading reading;
 
-    double x_start = particle.cur_pose_.x_ - laser_range_max_;
-    double x_end = particle.cur_pose_.x_ + laser_range_max_;
-    double y_start = particle.cur_pose_.y_ - laser_range_max_;
-    double y_end = particle.cur_pose_.y_ + laser_range_max_;
-    double step = particle.mapper_.resolution_;
+    // Table to record the closest range at each angle
+    std::vector<double> ranges(360, laser_range_max_);
+
+    double x_start = pose.x_ - laser_range_max_;
+    double x_end = pose.x_ + laser_range_max_;
+    double y_start = pose.y_ - laser_range_max_;
+    double y_end = pose.y_ + laser_range_max_;
+    double step = mapper.resolution_;
 
     for (double x = x_start; x < x_end; x += step)
     {
       for (double y = y_start; y < y_end; y += step)
       {
-        int index = particle.mapper_.xyToVectorIndex(x, y);
-        if (index < 0 or particle.mapper_.map_[index] <= 0)
+        // Get grid vector index
+        int index = mapper.xyToVectorIndex(x, y);
+        if (index < 0 or mapper.map_[index] <= 0)
           continue;
 
-        double x_real, y_real;
-        particle.mapper_.vectorIndexToXY(index, x_real, y_real);
-        point_cloud.xs_.push_back(x_real);
-        point_cloud.ys_.push_back(y_real);
+        // Get (x, y) coordinate of map grid center
+        double x_center, y_center;
+        mapper.vectorIndexToXY(index, x_center, y_center);
+
+        // Get expected range and bearing value
+        double range = sqrt((x_center - pose.x_) * (x_center - pose.x_) +
+                            (y_center - pose.y_) * (y_center - pose.y_));
+        double bearing =
+            atan2(y_center - pose.y_, x_center - pose.x_) - pose.theta_;
+        normalizeTheta2(bearing);
+
+        // Find nearest beam index
+        int beam_index = std::floor(bearing / BEAM_ANGLE);
+        double res = bearing - beam_index * BEAM_ANGLE;
+        if (res > BEAM_ANGLE / 2.0)
+          beam_index += 1;
+
+        if (range < ranges[beam_index])
+          ranges[beam_index] = range;
       }
     }
-    point_cloud.size_ = point_cloud.xs_.size();
+
+    for (size_t i = 0; i < ranges.size(); i++)
+    {
+      reading.ranges_.push_back(ranges[i]);
+      reading.bearings_.push_back(0.0 + i * BEAM_ANGLE);
+    }
+
+    return reading;
   }
 
-  // Generate 2D point cloud from particle and laser scan data (as ICP data)
-  void generatePointCloudXY(const Particle& particle,
-                            const LaserScanReading& reading,
-                            PointCloudXY& point_cloud)
+  // Generate ICP model from a particle's pose and mapper
+  std::vector<Eigen::Vector3d> generateICPModel(const StampedPose2D& pose,
+                                                const Mapper& mapper)
   {
-    point_cloud.xs_.clear();
-    point_cloud.ys_.clear();
+    std::vector<Eigen::Vector3d> points;
+
+    double x_start = pose.x_ - laser_range_max_;
+    double x_end = pose.x_ + laser_range_max_;
+    double y_start = pose.y_ - laser_range_max_;
+    double y_end = pose.y_ + laser_range_max_;
+    double step = mapper.resolution_;
+
+    for (double x = x_start; x < x_end; x += step)
+    {
+      for (double y = y_start; y < y_end; y += step)
+      {
+        int index = mapper.xyToVectorIndex(x, y);
+        if (index < 0 or mapper.map_[index] <= 0)
+          continue;
+
+        double x_center, y_center;
+        mapper.vectorIndexToXY(index, x_center, y_center);
+
+        points.push_back(Eigen::Vector3d(x_center, y_center, 0.0));
+      }
+    }
+
+    return points;
+  }
+
+  // Generate ICP data from particle pose and laser scan data
+  std::vector<Eigen::Vector3d> generateICPData(const StampedPose2D& pose,
+                                               const LaserScanReading& reading)
+  {
+    std::vector<Eigen::Vector3d> points;
 
     for (size_t i = 0; i < reading.ranges_.size(); i++)
     {
-      double theta = particle.cur_pose_.theta_ + reading.bearings_[i];
-      double x_real =
-          particle.cur_pose_.x_ + std::cos(theta) * reading.ranges_[i];
-      double y_real =
-          particle.cur_pose_.y_ + std::sin(theta) * reading.ranges_[i];
+      if (reading.ranges_[i] >= laser_range_max_)
+        continue;
 
-      point_cloud.xs_.push_back(x_real);
-      point_cloud.ys_.push_back(y_real);
+      double theta = pose.theta_ + reading.bearings_[i];
+      double x = pose.x_ + std::cos(theta) * reading.ranges_[i];
+      double y = pose.y_ + std::sin(theta) * reading.ranges_[i];
+
+      points.push_back(Eigen::Vector3d(x, y, 0.0));
     }
-    point_cloud.size_ = point_cloud.xs_.size();
+
+    return points;
   }
 
 public:  // Functions for map update
@@ -142,6 +229,9 @@ public:  // Functions for map update
     std::vector<int> update_queue(particle.mapper_.map_.size(), 0);
     for (size_t i = 0; i < reading.ranges_.size(); i++)
     {
+      if (reading.ranges_[i] >= laser_range_max_)
+        continue;
+
       // Free grid: waypoints in the laser route
       std::vector<int> idx_free =
           getFreeGridIndex(particle, reading.ranges_[i], reading.bearings_[i]);
@@ -254,9 +344,39 @@ public:  // Functions for map update
   }
 
 public:  // Functions for measurement model
+  // Measurement Model
+  // Compute the likelihood of scan P(Zt|Xt, m)
+  double computeScanLikelihood(const StampedPose2D& pose, const Mapper& mapper,
+                               const LaserScanReading& reading_laser)
+  {
+    // Expected reading generated from robot pose and map
+    LaserScanReading reading_map = generateLaserReading(pose, mapper);
+
+    // Assume beam is independent to each other
+    // Assume range and bearing are independent
+    // Select 36 beams among 360
+    double p = 1.0;
+    for (size_t i = 0; i < reading_map.ranges_.size(); i += 5)
+    {
+      double difference;
+
+      if ((reading_map.ranges_[i] >= laser_range_max_ and
+           reading_laser.ranges_[i] < laser_range_max_) or
+          (reading_map.ranges_[i] < laser_range_max_ and
+           reading_laser.ranges_[i] >= laser_range_max_))
+        difference = laser_range_max_ + measurement_noise_range_;
+      else
+        difference = fabs(reading_map.ranges_[i] - reading_laser.ranges_[i]);
+
+      p *= computeGaussianLikelihood(difference, 0, measurement_noise_range_);
+    }
+
+    return p;
+  }
+
+  // Inverse measurement model: Probabilistic Robotics P288, Table 9.2
   // Compute the occupancy grid status given robot pose, map, laser
   // scan data and grid index of map vector
-  // See Probabilistic Robotics P288, Table 9.2
   double inverseRangeSensorModel(const Particle& particle,
                                  const LaserScanReading& reading, int index)
   {

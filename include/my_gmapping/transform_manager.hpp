@@ -72,9 +72,9 @@ private:
 public:
   // Current and previous odometry data
   geometry_msgs::TransformStamped pre_odom_transform_;
-  Stamped2DPose pre_odom_pose_;
+  StampedPose2D pre_odom_pose_;
   geometry_msgs::TransformStamped cur_odom_transform_;
-  Stamped2DPose cur_odom_pose_;
+  StampedPose2D cur_odom_pose_;
 
 public:
   // Construtor
@@ -96,11 +96,11 @@ public:
   }
 
 public:
-  // Read odometry data from /tf and convert to Stamped2DPose
+  // Read odometry data from /tf and convert to StampedPose2D
   bool getOdometryData()
   {
     geometry_msgs::TransformStamped transform;
-    Stamped2DPose pose;
+    StampedPose2D pose;
 
     try
     {
@@ -124,7 +124,7 @@ public:
 
   // Publish /map to /odom transform to tf given current robot pose estimate
   // from Particle Filter
-  void publishMapToOdomTransform(Stamped2DPose pose)
+  void publishMapToOdomTransform(StampedPose2D pose)
   {
     // std::cerr << pose.timestamp_ << " " << pose.x_ << " " << pose.y_ << " "
     //           << pose.theta_ << std::endl;
@@ -142,7 +142,7 @@ public:
 public:
   // Convertion functions between datatypes
   void convert(geometry_msgs::TransformStamped transform_stamped,
-               Stamped2DPose& pose)
+               StampedPose2D& pose)
   {
     pose.timestamp_ = transform_stamped.header.stamp.toSec();
     pose.x_ = transform_stamped.transform.translation.x;
@@ -158,7 +158,7 @@ public:
     pose.theta_ = yaw;
   }
 
-  void convert(Stamped2DPose pose,
+  void convert(StampedPose2D pose,
                geometry_msgs::TransformStamped& transform_stamped)
   {
     transform_stamped.header.stamp = ros::Time::now();
