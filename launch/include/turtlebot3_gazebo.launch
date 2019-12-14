@@ -17,12 +17,12 @@
   </include>
 
   <!-- Launch Turtlebot3 model -->
-  <param name="robot_description" 
-         command="$(find xacro)/xacro 
+  <param name="robot_description"
+         command="$(find xacro)/xacro
                   $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
   <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf"
         args="-urdf -model turtlebot3_$(arg model)
-              -param robot_description 
+              -param robot_description
               -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos)" />
 
   <!-- Publish tf data -->
