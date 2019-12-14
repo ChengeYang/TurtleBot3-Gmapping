@@ -14,7 +14,7 @@ It is part of my final project at Northwestern University, together with [Probab
   - [3.1. Folders](#31-Folders)
   - [3.2. Cpp Files](#32-Cpp-Files)
 - [4. Algorithm](#4-Algorithm)
-  - [4.1. Particle Filter](#41-Particle Filter)
+  - [4.1. Particle Filter](#41-Particle-Filter)
   - [4.2. Motion Model](#42-Motion-Model)
   - [4.3. Measurement Model](#43-Measurement-Model)
   - [4.4. Scan Match](#44-Scan-Match)
