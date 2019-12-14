@@ -14,11 +14,12 @@ It is part of my final project at Northwestern University, together with [Probab
   - [3.1. Folders](#31-Folders)
   - [3.2. Cpp Files](#32-Cpp-Files)
 - [4. Algorithm](#4-Algorithm)
-  - [4.1. Motion Model](#41-Motion-Model)
-  - [4.2. Measurement Model](#42-MeasurementModel)
-  - [4.3. Measurement Model](#42-MeasurementModel)
-  - [4.4. Measurement Model](#42-MeasurementModel)
-  - [4.5. Measurement Model](#42-MeasurementModel)
+  - [4.1. Particle Filter](#41-Particle Filter)
+  - [4.2. Motion Model](#42-Motion-Model)
+  - [4.3. Measurement Model](#43-Measurement-Model)
+  - [4.4. Scan Match](#44-Scan-Match)
+  - [4.5. Map Update](#45-Map-Update)
+  - [4.6. Resampling](#46-Resampling)
 - [5. How to Run](#5-How-to-Run)
 - [6. Demo](#6-Demo)
 - [7. Future Work](#7-Future-Work)
@@ -76,17 +77,30 @@ The overall algorithm is based on the following references:
 * Sebastian Thrun's book **Probabilistic Robotics**
 * Paper [Improved Techniques for Grid Mapping with Rao-Blackwellized Particle Filters](http://www2.informatik.uni-freiburg.de/~stachnis/pdf/grisetti07tro.pdf)
 
-### 4.1. Motion Model
+### 4.1. Particle Filter
+I followed the algorithm exactly in [Improved Techniques for Grid Mapping with Rao-Blackwellized Particle Filters](http://www2.informatik.uni-freiburg.de/~stachnis/pdf/grisetti07tro.pdf). Please see Table **Algorithm 1 Improved RBPF for Map Learning**.
 
-### 4.2. Scan Match
+### 4.2. Motion Model
+For Turtlebot3, the odometry data is published through tf in ROS. The control input is the difference between two consecutive tf transform.
+
+Thus, I used the **Odometry Motion Model** in Probabilistic Robotics Chapter 5.4.
+* For computing P(x<sub>t</sub> | u<sub>t</sub>, x<sub>t-1</sub>): Probabilistic Robotics Page 134, **Algorithm motion_model_odometry**.
+* For sampling from Motion Model: Probabilistic Robotics Page 136, **Algorithm sample_motion_model_odometry**.
 
 ### 4.3. Measurement Model
+I used the **Likelihood Fields for Rnage Finders** in Probabilistic Robotics Chapter 6.4.
+* For computing P(z<sub>t</sub> | x<sub>t</sub>, m): Probabilistic Robotics Page 172, **Algorithm likelihood_field_range_finder_model**.
 
+### 4.4. Scan Match
+I implemented a basic ICP 2D scan matching algorithm using Eigen3 and PCL.
 
+### 4.5. Map Update
+For updating OccupancyGrid map, I applied Raycasting to get the free grids along the way and the occupied grid at laser hitting position.
+* For finding free grid: [Bresenham's line algorithm](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm).
+* For updating OccupancyGrid map: Probabilistic Robotics Page 288, **Algorithm inverse_range_sensor_model**.
 
-### 4.4. Map Update
-
-### 4.5. Resample
+### 4.6. Resampling
+Resampling is only conducted when the number of effective particles **N<sub>eff</sub>** drops below a given threshold.
 
 -----------------------------------------------------------------------------------------
 ## 5. How to Run
@@ -116,7 +130,10 @@ The mapping demo is shown below (Left - Rviz; Right - Gazebo):
 
 -----------------------------------------------------------------------------------------
 ## 7. Future Work
-1.
-2.
+1. There exists a drifting between particle state and the tf transform. I will try to figure out the reason behind.
+2. Motion model is not exactly following the one in the book currently. I will modify it to get better odometry estimate.
+3. Measurement model is not working properly right now. I still need to figure out whether a likelihood field is computed for each particle map at each timestamp. If so, I will implement it.
+4. The scan matcher seems to converge right now but can cause significant drifting error. Testing data and unit test should be created for it.
+5. When every submodule works as expected, I will then combine them together, then maybe publish it as a ROS package.
 
 -----------------------------------------------------------------------------------------
