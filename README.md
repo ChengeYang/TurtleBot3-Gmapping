@@ -97,7 +97,7 @@ I implemented a basic ICP 2D scan matching algorithm using Eigen3 and PCL.
 ### 4.5. Map Update
 For updating OccupancyGrid map, I applied Raycasting to get the free grids along the way and the occupied grid at laser hitting position.
 * For finding free grid: [Bresenham's line algorithm](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm).
-* For updating OccupancyGrid map: Probabilistic Robotics Page 288, **Algorithm inverse_range_sensor_model**.
+* For updating OccupancyGrid map: Probabilistic Robotics Page 286, **Algorithm occupancy_grid_mapping**.
 
 ### 4.6. Resampling
 Resampling is only conducted when the number of effective particles **N<sub>eff</sub>** drops below a given threshold.
