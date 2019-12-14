@@ -2,7 +2,7 @@
 #### Chenge Yang, 2019 winter, Northwestern University
 -----------------------------------------------------------------------------------------
 ## 1. Introduction
-This project implements the classic Gmapping algorithm for Turtlebot3 in C++. It is integrated with ROS, and provides full visualization in Rviz.
+This project contains my own implementation from scratch of the classic Gmapping algorithm for Turtlebot3 in C++. It is integrated with ROS, and provides full visualization in Rviz.
 
 It is part of my final project at Northwestern University, together with [Probabilistic-Robotics-Algorithms](https://github.com/ChengeYang/Probabilistic-Robotics-Algorithms).
 
@@ -26,7 +26,7 @@ It is part of my final project at Northwestern University, together with [Probab
 ## 2. Setup
 
 #### Turtlebot3 Setup
-This project uses Turtlebot3 Waffle Pi. Please refer to [doc/setup.md](doc/setup.md).
+This project uses Turtlebot3 Waffle Pi. Please refer to [doc/turtlebot3_setup.md](doc/turtlebot3_setup.md).
 
 #### PC Setup
 * Ubuntu 18.04
@@ -43,10 +43,18 @@ This project uses Turtlebot3 Waffle Pi. Please refer to [doc/setup.md](doc/setup
 
 -----------------------------------------------------------------------------------------
 ## 3. Project Structure
+This project is formulated as a standard [ROS package](http://wiki.ros.org/Packages#Common_Files_and_Directories).
 
 ### 3.1. Folders
+* [/doc](doc/): documents, figures, gifs, etc.
+* [/include](include/): C++ header file.
+* [/launch](launch/): ROS launch file.
+* [/rviz](rviz/): Rviz config file.
+* [/src](src/): C++ source file.
 
 ### 3.2. C++ Files
+* [/src/main.cpp](src/main.cpp):
+* [/include/]():
 
 -----------------------------------------------------------------------------------------
 ## 4. Algorithm
@@ -71,7 +79,13 @@ The overall algorithm is based on the following references:
 
 -----------------------------------------------------------------------------------------
 ## 6. Results
+For now, my algorithm can only do odometry data based mapping. Although it already has the complete implementation of Gmapping algorithm, the measurement model and scan match modules are not working as expected, which may cause drifting and diverging SLAM results.
 
+The mapping demo is shown below (Left - Rviz; Right - Gazebo):
+
+<p align = "center">
+  <img src = "doc/mapping_with_odometry_only.gif" height = "480px" style="margin:10px 10px">
+</p>
 -----------------------------------------------------------------------------------------
 ## 7. Future Work
 
