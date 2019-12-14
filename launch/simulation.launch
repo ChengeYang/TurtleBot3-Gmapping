@@ -4,8 +4,8 @@
     <include file="$(find my_gmapping)/launch/include/turtlebot3_gazebo.launch" />
 
     <!-- Launch Teleop for keyboard control -->
-    <!-- <include file="$(find my_gmapping)/launch/include/turtlebot3_teleop.launch" /> -->
-    
+    <include file="$(find my_gmapping)/launch/include/turtlebot3_teleop.launch" />
+
     <!-- Launch rviz -->
     <include file="$(find my_gmapping)/launch/include/turtlebot3_rviz.launch" />
 
